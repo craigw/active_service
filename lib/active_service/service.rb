@@ -7,38 +7,32 @@ module ActiveService
     end
 
     def process(message)
-      result = nil
+      reply = Message.new
+      reply.created_by(self)
+      reply.correlates_to(message)
 
       begin
         case
         when command?(message)
-          result = process_command(*extract_commands(message))
+          extract_commands(message).each { |command|
+            result = Command.new(serviced_class, command).execute
+            reply.payloads << result.to_xml
+          }
         else
-          error message, "Unrecognised message"
+          reply.errors << Error.new("Unrecognised message format")
         end
       rescue => e
-        error message, "Exception (#{e.class}): #{e.message}.\n#{e.backtrace.join("\n")}"
+        reply.errors << "Exception (#{e.class}): #{e.message}.\n#{e.backtrace.join("\n")}"
       end
 
-      if result
-        reply_to(message, result)
-      end
+      reply_to(message, reply)
     end
 
-    def error(trigger, value)
-      reply_to(trigger, value, :error)
-    end
-
-    def reply_to(trigger, value, mode = :result)
+    def reply_to(trigger, reply)
       Thread.new do
         destination = reply_channel(trigger)
-        message = {
-          "processor-id" => id,
-          "processed-at" => Time.now.strftime("%Y-%m-%dT%H:%M:%S%Z"),
-          "correlation-id" => (Hpricot(trigger.body) / "correlation-id text()")[0].to_s,
-          "#{mode}" => value
-        }
-        xml = message.to_xml(:root => "reply")
+        xml = reply.to_xml
+        puts xml if $DEBUG
         destination.put(xml)
         destination.close
       end
@@ -58,12 +52,6 @@ module ActiveService
         :queue => (Hpricot(reply_to.body) / "reply-to queue text()")[0].to_s
       )
       SMQueue(:configuration => reply_configuration)
-    end
-
-    def process_command(*commands)
-      commands.map do |command|
-        Command.new(serviced_class, command).execute
-      end
     end
 
     def command?(message)

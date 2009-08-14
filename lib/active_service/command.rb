@@ -8,15 +8,19 @@ module ActiveService
     def execute
       case command
       when :find
-        @principal.find(id)
+        resource = @principal.find(id)
+        resource
       when :update
-        @principal.find(id).update_attributes!(attributes)
-        @principal
+        resource = @principal.find(id)
+        resource.update_attributes!(attributes)
+        resource
       when :create
-        @principal.create!(attributes)
-        @principal
+        resource = @principal.create!(attributes)
+        resource
       when :delete
-        @principal.destroy(id)
+        resource = @principal.find(id)
+        resource.destroy
+        resource
       else
         raise ArgumentError, "Unknown command: `#{command}`"
       end

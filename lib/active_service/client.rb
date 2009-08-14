@@ -14,11 +14,10 @@ module ActiveService
       return_thread = Thread.new do
         message = reply_channel.get
         document = Hpricot(message.body)
-        correlation_id = (document / "correlation-id text()")[0]
-        if (document / "reply error").to_a.any?
-          @return_value = "Error: " + (document / "reply error text()").to_a.join("\n")
+        if (document / "result errors error").to_a.any?
+          @return_value = "Error: " + (document / "result errors error").to_a.map{ |error| error.children }.join("\n")
         else
-          @return_value = (document / "reply result").to_a[0]
+          @return_value = (document / "result payloads payload").to_a[0].children
         end
       end
       command(message)
